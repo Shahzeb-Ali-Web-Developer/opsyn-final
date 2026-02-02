@@ -105,7 +105,8 @@ export class RobustFlowPostProcessor {
       }
     }
 
-    return flowObj as Flow;
+    return flowObj as unknown as Flow;
+
   }
 
   /**
