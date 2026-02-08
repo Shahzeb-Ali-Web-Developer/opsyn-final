@@ -76,7 +76,6 @@ RUN npx nx run server-worker:build --skip-nx-cache
 # Install PROD deps (CRITICAL)
 # ----------------------
 RUN cd dist/packages/server/api && bun install --production --force
-RUN cd dist/packages/server/worker && bun install --production --force
 
 # ======================================================
 # STAGE 2: RUN
