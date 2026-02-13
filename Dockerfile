@@ -65,21 +65,14 @@ COPY packages/server/api/src/assets/default.cf /usr/local/etc/isolate
 COPY nginx.react.conf /etc/nginx/nginx.conf
 COPY --from=build /usr/src/app/LICENSE .
 
-RUN mkdir -p \
-    /usr/src/app/dist/packages/server \
-    /usr/src/app/dist/packages/engine \
-    /usr/src/app/dist/packages/shared
-
-# Copy built output
-COPY --from=build /usr/src/app/dist/packages/engine/ dist/packages/engine/
-COPY --from=build /usr/src/app/dist/packages/server/ dist/packages/server/
-COPY --from=build /usr/src/app/dist/packages/shared/ dist/packages/shared/
-
-# Copy workspace packages
+# Copy entire workspace
+COPY --from=build /usr/src/app/package.json .
+COPY --from=build /usr/src/app/bun.lock .
 COPY --from=build /usr/src/app/packages packages
+COPY --from=build /usr/src/app/dist dist
 
-# ✅ CRITICAL: Copy node_modules from build stage
-COPY --from=build /usr/src/app/node_modules node_modules
+# 🔥 CRITICAL: Install properly in run stage
+RUN bun install --production --no-save
 
 # Frontend
 COPY --from=build /usr/src/app/dist/packages/react-ui /usr/share/nginx/html/
