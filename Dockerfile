@@ -72,7 +72,7 @@ COPY --from=build /usr/src/app/packages packages
 COPY --from=build /usr/src/app/dist dist
 
 # 🔥 CRITICAL: Install properly in run stage
-RUN bun install --production --no-save
+RUN bun install --production --no-save --no-frozen-lockfile
 
 # Frontend
 COPY --from=build /usr/src/app/dist/packages/react-ui /usr/share/nginx/html/
