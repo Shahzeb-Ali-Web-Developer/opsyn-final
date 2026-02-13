@@ -55,16 +55,16 @@ FROM base AS run
 
 WORKDIR /usr/src/app
 
-# Copy node_modules from build
+# Copy node_modules
 COPY --from=build /usr/src/app/node_modules ./node_modules
 
-# Copy built dist
+# Copy dist
 COPY --from=build /usr/src/app/dist ./dist
 
-# Copy workspace packages (needed for runtime resolution)
+# Copy workspace packages
 COPY --from=build /usr/src/app/packages ./packages
 
-# Copy frontend build
+# Copy frontend
 COPY --from=build /usr/src/app/dist/packages/react-ui /usr/share/nginx/html/
 
 # Copy entrypoint
@@ -72,17 +72,19 @@ COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh
 
 # ======================================================
-# 🔥 CRITICAL FIX
-# Auto-link ALL @activepieces workspace packages
+# 🔥 REAL FIX — link using package.json name
 # ======================================================
 RUN mkdir -p node_modules/@activepieces && \
-    for dir in /usr/src/app/dist/packages/*; do \
-        name=$(basename "$dir"); \
-        ln -s "$dir" "node_modules/@activepieces/$name" || true; \
+    find dist/packages -name package.json | while read pkg; do \
+        name=$(node -p "require('./$pkg').name"); \
+        target=$(dirname "$pkg"); \
+        if echo "$name" | grep -q "@activepieces/"; then \
+            short=${name#@activepieces/}; \
+            ln -s "/usr/src/app/$target" "node_modules/@activepieces/$short" || true; \
+        fi; \
     done
 
 LABEL service=activepieces
 
 EXPOSE 80
-
 ENTRYPOINT ["./docker-entrypoint.sh"]
