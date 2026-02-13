@@ -1,12 +1,12 @@
 FROM node:20.19-bullseye-slim AS base
 
 # ======================================================
-# APT stability (VERY IMPORTANT)
+# APT stability
 # ======================================================
 RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
 
 # ======================================================
-# System dependencies (NO locales-all)
+# System dependencies
 # ======================================================
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -49,44 +49,39 @@ ENV NX_DAEMON=false
 ENV NX_NO_CLOUD=true
 
 # ======================================================
-# Engine dependency (isolated-vm)
+# Engine dependency
 # ======================================================
 RUN cd /usr/src && bun i isolated-vm@5.0.1
 
-# Required TS runtime deps (FIXES tslib crash)
-RUN bun add -g tslib@2.6.2
 
 # ======================================================
-# STAGE 1: BUILD
+# ================== STAGE 1: BUILD ====================
 # ======================================================
 FROM base AS build
 
 WORKDIR /usr/src/app
 
-# Root deps
+# Copy root dependency files
 COPY .npmrc package.json bun.lock ./
+
+# Install full workspace deps (dev + prod)
 RUN bun install
 
-# Source
+# Copy source
 COPY . .
 
-# ======================================================
-# Build projects
-# ======================================================
+# Build frontend
 RUN npx nx run-many --target=build --projects=react-ui --skip-nx-cache
+
+# Build API
 RUN npx nx run-many --target=build --projects=server-api --configuration=production --skip-nx-cache
+
+# Build Worker
 RUN npx nx run server-worker:build --skip-nx-cache
 
-# ======================================================
-# PROD deps (API ONLY)
-# ======================================================
-RUN cd dist/packages/server/api && bun install --production --force
-
-# ❌ DO NOT install worker prod deps
-# Worker depends on workspace packages that are NOT published
 
 # ======================================================
-# STAGE 2: RUN
+# ================== STAGE 2: RUN ======================
 # ======================================================
 FROM base AS run
 
@@ -101,26 +96,26 @@ COPY nginx.react.conf /etc/nginx/nginx.conf
 # License
 COPY --from=build /usr/src/app/LICENSE .
 
-# Required dirs
+# Required directories
 RUN mkdir -p \
     /usr/src/app/dist/packages/server \
     /usr/src/app/dist/packages/engine \
     /usr/src/app/dist/packages/shared
 
-# ======================================================
 # Copy built artifacts
-# ======================================================
 COPY --from=build /usr/src/app/dist/packages/engine/ /usr/src/app/dist/packages/engine/
 COPY --from=build /usr/src/app/dist/packages/server/ /usr/src/app/dist/packages/server/
 COPY --from=build /usr/src/app/dist/packages/shared/ /usr/src/app/dist/packages/shared/
 
-# ======================================================
-# Runtime deps (API ONLY)
-# ======================================================
-RUN cd /usr/src/app/dist/packages/server/api && bun install --production --force
-
-# Workspace packages (needed by worker at runtime)
+# Copy workspace packages (needed by worker)
 COPY --from=build /usr/src/app/packages packages
+
+# Copy root package.json + lockfile for runtime install
+COPY --from=build /usr/src/app/package.json .
+COPY --from=build /usr/src/app/bun.lock .
+
+# 🔥 CRITICAL FIX: Install production deps at ROOT
+RUN bun install --production --force
 
 # Frontend
 COPY --from=build /usr/src/app/dist/packages/react-ui /usr/share/nginx/html/
